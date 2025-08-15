@@ -1,0 +1,18 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Build') {
+            agent {
+                docker {
+                    image 'python:3-alpine'
+                    args '-u root'. // use root user to install packages
+                }
+            }
+            steps {
+                sh 'apk add jq'
+            }
+        }
+
+    }
+}
