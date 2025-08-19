@@ -2,10 +2,12 @@ pipeline {
     agent any
 
     environment { 
-        NETLIFY_SITE_ID = 'fa6d06d8-5462-49ac-8ab3-e2a7f6b14282' 
-        NETLIFY_AUTH_TOKEN = credentials('netlify-token')
         REACT_APP_VERSION = "1.0.$BUILD_ID"
         AWS_DEFAULT_REGION = 'ap-northeast-1'
+        APP_NAME = 'learnjenkinsapp'
+        AWS_ECS_CLUSTER = 'learn-jekins-prod'
+        AWS_ECS_SERVICE_PROD = 'LearnJenkinsApp-TaskDefinition-Prod-service-rf0kpbpw'
+        AWS_ECS_TD_PROD = 'LearnJenkinsApp-TaskDefinition-Prod'
     }
 
     stages {
@@ -40,7 +42,7 @@ pipeline {
 
             steps {
                 sh '''
-                    docker build -t myjenkinsapp .
+                    docker build -t $APP_NAME:$REACT_APP_VERSION .
                 '''
             }
         }  
@@ -60,7 +62,7 @@ pipeline {
                         aws --version
                         LATEST_TD_REVISION=$(aws ecs register-task-definition --cli-input-json file://aws/task-definition-prod.json | jq '.taskDefinition.revision')
                         echo $LATEST_TD_REVISION
-                        aws ecs update-service --cluster learn-jekins-prod --service LearnJenkinsApp-TaskDefinition-Prod-service-rf0kpbpw --task-definition LearnJenkinsApp-TaskDefinition-Prod:$LATEST_TD_REVISION
+                        aws ecs update-service --cluster $AWS_ECS_CLUSTER --service $AWS_ECS_SERVICE_PROD --task-definition $AWS_ECS_TD_PROD:$LATEST_TD_REVISION
                     '''
                 }
             }
