@@ -5,6 +5,7 @@ pipeline {
         NETLIFY_SITE_ID = 'fa6d06d8-5462-49ac-8ab3-e2a7f6b14282' 
         NETLIFY_AUTH_TOKEN = credentials('netlify-token')
         REACT_APP_VERSION = "1.0.$BUILD_ID"
+        AWS_DEFAULT_REGION = 'ap-northeast-1'
     }
 
     stages {
@@ -35,133 +36,130 @@ pipeline {
                     args "--entrypoint=''"
                 }
             }
-            environment {
-                AWS_S3_BUCKET = 'learn-jenkins-app-202508181110'
-            }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'my-aws', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
                     sh '''
                         aws --version
-                        aws s3 sync build s3://$AWS_S3_BUCKET
+                        aws ecs register-task-definition --cli-input-json file://aws/task-definition-prod.json
                     '''
                 }
             }
         }
 
-        stage('Tests') {
-            parallel {
-                stage('Unit tests') {
-                    agent {
-                        docker {
-                            image 'node:18-alpine'
-                            reuseNode true
-                        }
-                    }
+        // stage('Tests') {
+        //     parallel {
+        //         stage('Unit tests') {
+        //             agent {
+        //                 docker {
+        //                     image 'node:18-alpine'
+        //                     reuseNode true
+        //                 }
+        //             }
 
-                    steps {
-                        sh '''
-                            #test -f build/index.html
-                            npm test
-                        '''
-                    }
-                    post {
-                        always {
-                            junit 'jest-results/junit.xml'
-                        }
-                    }
-                }
+        //             steps {
+        //                 sh '''
+        //                     #test -f build/index.html
+        //                     npm test
+        //                 '''
+        //             }
+        //             post {
+        //                 always {
+        //                     junit 'jest-results/junit.xml'
+        //                 }
+        //             }
+        //         }
 
-                stage('E2E') {
-                    agent {
-                        docker {
-                            image 'my-playwright'
-                            reuseNode true
-                        }
-                    }
+        //         stage('E2E') {
+        //             agent {
+        //                 docker {
+        //                     image 'my-playwright'
+        //                     reuseNode true
+        //                 }
+        //             }
 
-                    steps {
-                        sh '''
-                            serve -s build &
-                            sleep 10
-                            npx playwright test  --reporter=html
-                        '''
-                    }
+        //             steps {
+        //                 sh '''
+        //                     serve -s build &
+        //                     sleep 10
+        //                     npx playwright test  --reporter=html
+        //                 '''
+        //             }
 
-                    post {
-                        always {
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Local E2E', reportTitles: '', useWrapperFileDirectly: true])
-                        }
-                    }
-                }
-            }
-        }
+        //             post {
+        //                 always {
+        //                     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Local E2E', reportTitles: '', useWrapperFileDirectly: true])
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
-        stage('Deploy staging') {
-            agent {
-                docker {
-                    image 'my-playwright'
-                    reuseNode true
-                }
-            }
+        // stage('Deploy staging') {
+        //     agent {
+        //         docker {
+        //             image 'my-playwright'
+        //             reuseNode true
+        //         }
+        //     }
 
-            environment {
-                CI_ENVIRONMENT_URL = 'STAGING_URL_TO_BE_SET'
-            }
+        //     environment {
+        //         CI_ENVIRONMENT_URL = 'STAGING_URL_TO_BE_SET'
+        //     }
 
-            steps {
-                sh '''
-                    netlify --version
-                    echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
-                    netlify status
-                    netlify deploy --dir=build --json > deploy-output.json
-                    CI_ENVIRONMENT_URL=$(node-jq -r '.deploy_url' deploy-output.json)
-                    npx playwright test  --reporter=html
-                '''
-            }
+        //     steps {
+        //         sh '''
+        //             netlify --version
+        //             echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
+        //             netlify status
+        //             netlify deploy --dir=build --json > deploy-output.json
+        //             CI_ENVIRONMENT_URL=$(node-jq -r '.deploy_url' deploy-output.json)
+        //             npx playwright test  --reporter=html
+        //         '''
+        //     }
 
-            post {
-                always {
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Staging E2E', reportTitles: '', useWrapperFileDirectly: true])
-                }
-            }
-        }
+        //     post {
+        //         always {
+        //             publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Staging E2E', reportTitles: '', useWrapperFileDirectly: true])
+        //         }
+        //     }
+        // }
 
-        stage('Approval') {
-            steps {
-                timeout(time: 15, unit: 'MINUTES') {
-                    input message: 'Do you wish to deploy to production?', ok: 'Yes, I am sure!'
-                }
-            }
-        }
+        // stage('Approval') {
+        //     steps {
+        //         timeout(time: 15, unit: 'MINUTES') {
+        //             input message: 'Do you wish to deploy to production?', ok: 'Yes, I am sure!'
+        //         }
+        //     }
+        // }
 
-        stage('Deploy prod') {
-            agent {
-                docker {
-                    image 'my-playwright'
-                    reuseNode true
-                }
-            }
+        // stage('Deploy prod') {
+        //     agent {
+        //         docker {
+        //             image 'my-playwright'
+        //             reuseNode true
+        //         }
+        //     }
 
-            environment {
-                CI_ENVIRONMENT_URL = 'https://cool-biscotti-ad7d7a.netlify.app'
-            }
+        //     environment {
+        //         CI_ENVIRONMENT_URL = 'https://cool-biscotti-ad7d7a.netlify.app'
+        //     }
 
-            steps {
-                sh '''
-                    node --version
-                    netlify --version
-                    echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
-                    netlify status
-                    netlify deploy --dir=build --prod
-                    npx playwright test  --reporter=html
-                '''
-            }
+        //     steps {
+        //         sh '''
+        //             node --version
+        //             netlify --version
+        //             echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
+        //             netlify status
+        //             netlify deploy --dir=build --prod
+        //             npx playwright test  --reporter=html
+        //         '''
+        //     }
 
-            post {
-                always {
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Prod E2E', reportTitles: '', useWrapperFileDirectly: true])
-                }
-            }
-        }
+        //     post {
+        //         always {
+        //             publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Prod E2E', reportTitles: '', useWrapperFileDirectly: true])
+        //         }
+        //     }
+        // }
     }
 }
